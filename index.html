@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Wedding Invitations</title>
+    <style>
+        body {
+            font-family: 'Poppins', Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f7f7f7;
+        }
+
+        #preview-container {
+            margin: 20px auto;
+            width: 1252px;
+            height: 3592px; /* Combined height for both pages */
+            position: relative;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            overflow: hidden;
+        }
+
+        .page {
+            width: 1252px;
+            height: 1796px;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .page-1 {
+            background-color: #eee;
+        }
+
+        .page-2 {
+            background-color: #ddd;
+            position: relative;
+        }
+
+        .text-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: black;
+            text-align: center;
+            cursor: move;
+            border: 1px dashed #000;
+            padding: 5px;
+            min-width: 200px;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        .controls input[type="file"],
+        .controls select {
+            margin: 10px;
+        }
+
+        .controls input[type="color"],
+        .controls select,
+        .controls input[type="range"] {
+            margin: 5px;
+        }
+
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #76a65a;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #5e8d4e;
+        }
+
+        .progress-bar-container {
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 80%;
+            margin: 0 auto;
+            background-color: #ccc;
+            height: 20px;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            width: 0;
+            height: 100%;
+            background-color: #76a65a;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            margin-top: 10px;
+            font-size: 16px;
+        }
+
+        .info-box {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dynamic Wedding Invitations</h1>
+    <div class="controls">
+        <label for="bgPage1">Upload Background for Page 1:</label>
+        <input type="file" id="bgPage1" accept="image/*" /><br />
+
+        <label for="bgPage2">Upload Background for Page 2:</label>
+        <input type="file" id="bgPage2" accept="image/*" /><br />
+
+        <label for="csvFile">Upload Names CSV:</label>
+        <input type="file" id="csvFile" accept=".csv" /><br />
+
+        <label for="nameDropdown">Select Name to Preview:</label>
+        <select id="nameDropdown">
+            <option value="">No Names Loaded</option>
+        </select><br />
+
+        <label for="font-family">Font:</label>
+        <select id="font-family">
+            <option value="Poppins">Poppins</option>
+            <option value="Arial">Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+        </select>
+
+        <label for="font-size">Font Size:</label>
+        <input type="range" id="font-size" min="12" max="100" value="24" />
+
+        <label for="text-color">Text Color:</label>
+        <input type="color" id="text-color" value="#000000" /><br />
+
+        <label for="text-alignment">Text Alignment:</label>
+        <select id="text-alignment">
+            <option value="center">Center</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+        </select><br />
+
+        <button onclick="centerTextBox('horizontal')">Center Horizontally</button>
+        <button onclick="centerTextBox('vertical')">Center Vertically</button>
+        <button onclick="centerTextBox('both')">Center Both</button>
+    </div>
+
+    <div id="preview-container">
+        <div class="page page-1"></div>
+        <div class="page page-2">
+            <div class="text-box" id="text-box" contenteditable="true">Your Text Here</div>
+        </div>
+    </div>
+    <div class="info-box">
+        <p id="text-box-info">Text Box Width: 0px</p>
+    </div>
+    <button onclick="generatePDFs()">Generate PDFs</button>
+
+    <div class="progress-bar-container">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-text" id="progress-text">Waiting to start...</div>
+    </div>
+
+    <!-- Include interact.js for drag-and-resize functionality -->
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <!-- Include html2pdf.js for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+
+    <script>
+        let names = [];
+
+        // Handle background uploads
+        document.getElementById('bgPage1').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.querySelector('.page-1').style.backgroundImage = `url('${e.target.result}')`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('bgPage2').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.querySelector('.page-2').style.backgroundImage = `url('${e.target.result}')`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Read CSV file for names
+        document.getElementById('csvFile').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const csvData = e.target.result;
+                    names = csvData.split('\n').map(row => row.trim()).filter(row => row !== '');
+                    populateDropdown(names);
+                    alert(`Successfully loaded ${names.length} names from the CSV file.`);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Populate dropdown with names
+        const populateDropdown = (names) => {
+            const dropdown = document.getElementById('nameDropdown');
+            dropdown.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join('');
+        };
+
+        // Update preview text when a name is selected
+        document.getElementById('nameDropdown').addEventListener('change', (event) => {
+            const selectedName = event.target.value;
+            document.getElementById('text-box').textContent = selectedName || "Your Text Here";
+        });
+
+        // Drag and resize text box
+        interact('.text-box').draggable({
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: 'parent',
+                }),
+            ],
+            listeners: {
+                move(event) {
+                    const target = event.target;
+                    const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                    const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute('data-x', x);
+                    target.setAttribute('data-y', y);
+                },
+            },
+        }).resizable({
+            edges: { left: true, right: true, bottom: true, top: true },
+        }).on('resizemove', function (event) {
+            const target = event.target;
+            const width = event.rect.width;
+
+            target.style.width = `${width}px`;
+            const height = event.rect.height;
+
+            target.style.height = `${height}px`;
+
+            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.deltaRect.left;
+            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.deltaRect.top;
+
+            target.style.transform = `translate(${x}px, ${y}px)`;
+            target.setAttribute('data-x', x);
+            target.setAttribute('data-y', y);
+
+            // Update the width of the text box in the info box
+            document.getElementById('text-box-info').textContent = `Text Box Width: ${Math.round(width)}px`;
+        });
+
+        // Center the text box
+        const centerTextBox = (direction) => {
+            const textBox = document.getElementById('text-box');
+            const container = document.querySelector('.page-2');
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+
+            if (direction === 'horizontal' || direction === 'both') {
+                const textBoxWidth = textBox.offsetWidth;
+                const left = (containerWidth - textBoxWidth) / 2;
+                textBox.style.left = `${left}px`;
+                textBox.style.transform = `translate(-50%, ${textBox.style.transform.split(',')[1]})`;
+            }
+
+            if (direction === 'vertical' || direction === 'both') {
+                const textBoxHeight = textBox.offsetHeight;
+                const top = (containerHeight - textBoxHeight) / 2;
+                textBox.style.top = `${top}px`;
+                textBox.style.transform = `${textBox.style.transform.split(',')[0]}, translateY(-50%)`;
+            }
+        };
+
+        // Font customization
+        document.getElementById('font-family').addEventListener('change', (event) => {
+            document.getElementById('text-box').style.fontFamily = event.target.value;
+        });
+
+        document.getElementById('font-size').addEventListener('input', (event) => {
+            document.getElementById('text-box').style.fontSize = `${event.target.value}px`;
+        });
+
+        document.getElementById('text-color').addEventListener('input', (event) => {
+            document.getElementById('text-box').style.color = event.target.value;
+        });
+
+        document.getElementById('text-alignment').addEventListener('change', (event) => {
+            document.getElementById('text-box').style.textAlign = event.target.value;
+        });
+
+        // Generate PDFs with progress bar
+        async function generatePDFs() {
+            if (names.length === 0) {
+                alert("No names loaded from CSV. Please upload a CSV file.");
+                return;
+            }
+
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const totalNames = names.length;
+
+            for (let i = 0; i < totalNames; i++) {
+                const name = names[i];
+                const textBox = document.getElementById('text-box');
+                textBox.textContent = name;
+
+                const container = document.getElementById('preview-container');
+                const opt = {
+                    margin: 0,
+                    filename: `Wedding_Invitation_For_${name}.pdf`,
+                    image: { type: 'jpeg', quality: 1 },
+                    html2canvas: { scale: 2 }, // High resolution
+                    jsPDF: { unit: 'px', format: [1252, 1796], orientation: 'portrait' },
+                };
+
+                await html2pdf().from(container).set(opt).save();
+
+                // Update progress bar
+                const progressPercentage = ((i + 1) / totalNames) * 100;
+                progressFill.style.width = `${progressPercentage}%`;
+                progressText.textContent = `Processing ${i + 1} of ${totalNames}: ${name}`;
+            }
+
+            progressText.textContent = "All PDFs generated!";
+        }
+    </script>
+</body>
+</html>
+
