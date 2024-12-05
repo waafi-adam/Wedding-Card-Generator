@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dynamic Wedding Invitations with Movable Text</title>
+    <title>Dynamic Wedding Invitations with WhatsApp Integration</title>
     <style>
         body {
             font-family: 'Poppins', Arial, sans-serif;
@@ -109,7 +109,7 @@
     </style>
 </head>
 <body>
-    <h1>Dynamic Wedding Invitations with Movable Text</h1>
+    <h1>Dynamic Wedding Invitations with WhatsApp Integration</h1>
     <div class="controls">
         <label for="bgPage1">Upload Background for Page 1:</label>
         <input type="file" id="bgPage1" accept="image/*" /><br />
@@ -117,7 +117,7 @@
         <label for="bgPage2">Upload Background for Page 2:</label>
         <input type="file" id="bgPage2" accept="image/*" /><br />
 
-        <label for="csvFile">Upload Names CSV:</label>
+        <label for="csvFile">Upload Names and Numbers CSV:</label>
         <input type="file" id="csvFile" accept=".csv" /><br />
 
         <label for="nameDropdown">Select Name to Preview:</label>
@@ -125,18 +125,14 @@
             <option value="">No Names Loaded</option>
         </select><br />
 
-        <label for="font-family">Font:</label>
-        <select id="font-family">
-            <option value="Poppins">Poppins</option>
-            <option value="Arial">Arial</option>
-            <option value="Times New Roman">Times New Roman</option>
+        <label for="messageText">Enter WhatsApp Message:</label><br />
+        <textarea id="messageText" rows="4" cols="50" placeholder="Dear <name>, you are invited to our wedding!"></textarea><br />
+
+        <label for="sendOption">Send Option:</label>
+        <select id="sendOption">
+            <option value="download">Download PDFs</option>
+            <option value="whatsapp">Send via WhatsApp</option>
         </select>
-
-        <label for="font-size">Font Size:</label>
-        <input type="range" id="font-size" min="12" max="100" value="24" />
-
-        <label for="text-color">Text Color:</label>
-        <input type="color" id="text-color" value="#000000" />
     </div>
 
     <div id="preview-container">
@@ -145,7 +141,7 @@
             <div class="text-box" id="text-box" contenteditable="true">Your Text Here</div>
         </div>
     </div>
-    <button onclick="generatePDFs()">Generate PDFs</button>
+    <button onclick="processInvitations()">Process Invitations</button>
 
     <div class="progress-bar-container">
         <div class="progress-bar">
@@ -160,7 +156,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
 
     <script>
-        let names = [];
+        let data = [];
 
         // Handle background uploads
         document.getElementById('bgPage1').addEventListener('change', (event) => {
@@ -185,16 +181,17 @@
             }
         });
 
-        // Read CSV file for names
+        // Read CSV file for names and phone numbers
         document.getElementById('csvFile').addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const csvData = e.target.result;
-                    names = csvData.split('\n').map(row => row.trim()).filter(row => row !== '');
-                    populateDropdown(names);
-                    alert(`Successfully loaded ${names.length} names from the CSV file.`);
+                    const rows = csvData.split('\n').map(row => row.split(',').map(item => item.trim()));
+                    data = rows.map(([name, phone]) => ({ name, phone }));
+                    populateDropdown(data.map(d => d.name));
+                    alert(`Successfully loaded ${data.length} entries from the CSV file.`);
                 };
                 reader.readAsText(file);
             }
@@ -212,7 +209,60 @@
             document.getElementById('text-box').textContent = selectedName || "Your Text Here";
         });
 
-        // Drag and resize text box
+        // Process invitations (download or send via WhatsApp)
+        async function processInvitations() {
+            const sendOption = document.getElementById('sendOption').value;
+            const messageTemplate = document.getElementById('messageText').value;
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const totalEntries = data.length;
+
+            for (let i = 0; i < totalEntries; i++) {
+                const { name, phone } = data[i];
+                const textBox = document.getElementById('text-box');
+                textBox.textContent = name;
+
+                const container = document.getElementById('preview-container');
+                const opt = {
+                    margin: 0,
+                    filename: `Wedding_Invitation_For_${name}.pdf`,
+                    image: { type: 'jpeg', quality: 1 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'px', format: [1252, 1796], orientation: 'portrait' },
+                };
+
+                const pdfBlob = await html2pdf().from(container).set(opt).outputPdf('blob');
+
+                if (sendOption === "download") {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(pdfBlob);
+                    link.download = `Wedding_Invitation_For_${name}.pdf`;
+                    link.click();
+                } else if (sendOption === "whatsapp" && phone) {
+                    const message = encodeURIComponent(
+                        messageTemplate.replace(/<name>/g, name)
+                    );
+                    const url = `https://wa.me/${phone}?text=${message
+                    }`;
+                    const formData = new FormData();
+                    formData.append('file', pdfBlob, `Wedding_Invitation_For_${name}.pdf`);
+
+                    // Open WhatsApp Web with the generated URL
+                    window.open(url, '_blank');
+                } else if (sendOption === "whatsapp" && !phone) {
+                    console.warn(`No phone number available for ${name}. Skipping WhatsApp send.`);
+                }
+
+                // Update progress bar
+                const progressPercentage = ((i + 1) / totalEntries) * 100;
+                progressFill.style.width = `${progressPercentage}%`;
+                progressText.textContent = `Processing ${i + 1} of ${totalEntries}: ${name}`;
+            }
+
+            progressText.textContent = "All invitations processed!";
+        }
+
+        // Enable dragging for text-box
         interact('.text-box').draggable({
             modifiers: [
                 interact.modifiers.restrictRect({
@@ -244,43 +294,6 @@
         document.getElementById('text-color').addEventListener('input', (event) => {
             document.getElementById('text-box').style.color = event.target.value;
         });
-
-        // Generate PDFs with progress bar
-        async function generatePDFs() {
-            if (names.length === 0) {
-                alert("No names loaded from CSV. Please upload a CSV file.");
-                return;
-            }
-
-            const progressFill = document.getElementById('progress-fill');
-            const progressText = document.getElementById('progress-text');
-            const totalNames = names.length;
-
-            for (let i = 0; i < totalNames; i++) {
-                const name = names[i];
-                const textBox = document
-                .getElementById('text-box');
-                textBox.textContent = name;
-
-                const container = document.getElementById('preview-container');
-                const opt = {
-                    margin: 0,
-                    filename: `Wedding_Invitation_For_${name}.pdf`,
-                    image: { type: 'jpeg', quality: 1 },
-                    html2canvas: { scale: 2 }, // High resolution
-                    jsPDF: { unit: 'px', format: [1252, 1796], orientation: 'portrait' },
-                };
-
-                await html2pdf().from(container).set(opt).save();
-
-                // Update progress bar
-                const progressPercentage = ((i + 1) / totalNames) * 100;
-                progressFill.style.width = `${progressPercentage}%`;
-                progressText.textContent = `Processing ${i + 1} of ${totalNames}: ${name}`;
-            }
-
-            progressText.textContent = "All PDFs generated!";
-        }
     </script>
 </body>
 </html>
